@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>S2GO Query → Gaussian Lab</title>
+  <style>
+    :root {
+      --bg: #071018;
+      --bg2: #0a1520;
+      --panel: rgba(14, 28, 39, .92);
+      --panel2: rgba(18, 36, 48, .84);
+      --line: rgba(178, 207, 222, .15);
+      --line-hi: rgba(178, 207, 222, .34);
+      --text: #edf7fb;
+      --muted: #91a7b3;
+      --query: #62e2c6;
+      --query2: #2aa6ad;
+      --parent: #ad91ff;
+      --parent2: #6f65d8;
+      --child: #ffbd61;
+      --child2: #ff7d55;
+      --voxel: #6eb8ff;
+      --good: #78e59d;
+      --warn: #ff7e88;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .34);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 14% 3%, rgba(41, 158, 164, .16), transparent 30%),
+        radial-gradient(circle at 90% 7%, rgba(142, 105, 221, .14), transparent 28%),
+        linear-gradient(155deg, #081621, #050a0f 73%);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .17;
+      background-image:
+        linear-gradient(rgba(255,255,255,.027) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.027) 1px, transparent 1px);
+      background-size: 31px 31px;
+      mask-image: linear-gradient(to bottom, #000, transparent 95%);
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    code { font-family: var(--mono); }
+
+    .app {
+      width: min(1540px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 22px 0 42px;
+      position: relative;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--query);
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--query);
+      box-shadow: 0 0 0 5px rgba(98,226,198,.08), 0 0 20px var(--query);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 3.3vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -.046em;
+      font-weight: 790;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.75;
+      max-width: 880px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      justify-content: flex-end;
+      padding-top: 4px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(10,22,31,.72);
+      color: #c7d8df;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.query { background: var(--query); box-shadow: 0 0 11px var(--query); }
+    .dot.parent { background: var(--parent); box-shadow: 0 0 11px var(--parent); }
+    .dot.child { background: var(--child); box-shadow: 0 0 11px var(--child); }
+    .dot.voxel { background: var(--voxel); box-shadow: 0 0 11px var(--voxel); }
+
+    .lab {
+      display: grid;
+      grid-template-columns: 226px minmax(0, 1fr) 350px;
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: linear-gradient(165deg, rgba(17,34,46,.94), rgba(8,18,27,.95));
+      border-radius: 19px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .sidebar {
+      min-height: 746px;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .nav-label {
+      color: #718894;
+      font-size: 10px;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      font-weight: 800;
+      padding: 7px 9px 9px;
+    }
+
+    .nav { display: grid; gap: 6px; }
+
+    .nav-btn {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 13px;
+      background: transparent;
+      color: #9db0ba;
+      display: grid;
+      grid-template-columns: 30px minmax(0,1fr);
+      gap: 9px;
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .nav-btn:hover { background: rgba(255,255,255,.035); color: #e3eff3; }
+    .nav-btn.active {
+      color: #effffc;
+      border-color: rgba(98,226,198,.29);
+      background: linear-gradient(135deg, rgba(98,226,198,.12), rgba(95,114,204,.09));
+    }
+
+    .nav-num {
+      width: 29px;
+      height: 29px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.045);
+      color: #728894;
+      font: 700 10px var(--mono);
+    }
+
+    .nav-btn.active .nav-num { color: var(--query); background: rgba(98,226,198,.14); }
+    .nav-copy strong { display:block; font-size: 12px; margin: 1px 0 3px; }
+    .nav-copy span { display:block; color:#708793; font-size:10px; line-height:1.45; }
+
+    .side-controls {
+      border-top: 1px solid var(--line);
+      padding: 13px 7px 3px;
+    }
+
+    .mini-title {
+      color: #788f9b;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      padding: 4px;
+      background: rgba(0,0,0,.17);
+      border: 1px solid var(--line);
+      border-radius: 11px;
+    }
+
+    .seg button {
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #78909b;
+      cursor: pointer;
+      padding: 7px 4px;
+      font-size: 10px;
+      font-weight: 750;
+    }
+
+    .seg button.active {
+      color: #effffc;
+      background: rgba(98,226,198,.13);
+      box-shadow: inset 0 0 0 1px rgba(98,226,198,.22);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 5px;
+      margin-top: 8px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: rgba(255,255,255,.025);
+      padding: 7px 4px;
+      text-align: center;
+    }
+
+    .stat b { display:block; color:#dff8f3; font:700 12px var(--mono); }
+    .stat span { display:block; color:#6e8590; font-size:8px; margin-top:3px; }
+
+    .workspace {
+      min-height: 746px;
+      display: grid;
+      grid-template-rows: auto minmax(460px, 1fr) auto;
+    }
+
+    .work-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .work-title strong { display:block; font-size:13px; }
+    .work-title span { display:block; margin-top:4px; color:#758d99; font-size:10px; }
+
+    .actions { display:flex; gap:7px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #b9cad1;
+      font-size: 10px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .btn:hover { border-color: rgba(98,226,198,.38); color:#edfffc; transform:translateY(-1px); }
+    .btn.primary { color:#eafffb; background:rgba(98,226,198,.12); border-color:rgba(98,226,198,.28); }
+
+    .canvas-wrap {
+      min-height: 460px;
+      position: relative;
+      background:
+        radial-gradient(circle at 48% 52%, rgba(130,99,213,.08), transparent 31%),
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: auto, 24px 24px, 24px 24px;
+      overflow: hidden;
+    }
+
+    .canvas-wrap svg { width:100%; height:100%; min-height:460px; display:block; }
+
+    .svg-label { fill:#dcecf1; font: 700 13px var(--sans); }
+    .svg-small { fill:#78909c; font: 500 10px var(--sans); }
+    .svg-mono { fill:#8fa7b2; font: 600 10px var(--mono); }
+    .flow { stroke:rgba(160,190,204,.27); stroke-width:2; fill:none; marker-end:url(#arrow); }
+    .flow.hot { stroke:var(--query); filter:url(#glow); }
+    .node { transition:opacity .28s ease, filter .28s ease, transform .28s ease; transform-origin:center; }
+    .node.dim { opacity:.18; filter:saturate(.25); }
+    .node.hot { filter:url(#glow); }
+    .child-shape { cursor:pointer; transition:opacity .2s, stroke-width .2s, filter .2s; }
+    .child-shape:hover, .child-shape.selected { stroke-width:3; filter:url(#warmGlow); }
+
+    .stage-caption {
+      position: absolute;
+      left: 18px;
+      bottom: 16px;
+      max-width: min(540px, calc(100% - 36px));
+      border: 1px solid var(--line-hi);
+      background: rgba(7,17,25,.88);
+      border-radius: 13px;
+      padding: 11px 13px;
+      box-shadow: 0 14px 38px rgba(0,0,0,.27);
+      pointer-events: none;
+    }
+
+    .stage-caption b { color:var(--query); font-size:11px; letter-spacing:.05em; }
+    .stage-caption p { margin:5px 0 0; color:#a8bbc4; font-size:11px; line-height:1.6; }
+
+    .formula-strip {
+      border-top: 1px solid var(--line);
+      padding: 12px 16px 14px;
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 10px;
+    }
+
+    .formula {
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(255,255,255,.025);
+      padding: 10px 12px;
+    }
+    .formula span { display:block; color:#708894; font-size:9px; margin-bottom:5px; text-transform:uppercase; letter-spacing:.11em; }
+    .formula code { color:#dcecf0; font-size:12px; line-height:1.6; }
+    .formula code em { color:var(--child); font-style:normal; }
+
+    .inspector {
+      min-height: 746px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .inspect-head {
+      padding: 15px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .inspect-head strong { display:block; font-size:13px; }
+    .inspect-head span { display:block; color:#748b97; margin-top:4px; font-size:10px; }
+
+    .inspect-body { padding:14px; display:grid; gap:10px; overflow:auto; }
+    .explain {
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(255,255,255,.025);
+      padding: 12px;
+    }
+    .explain h3 { margin:0 0 7px; font-size:12px; color:#e7f6fa; }
+    .explain p { margin:0; color:#92a8b3; font-size:11px; line-height:1.68; }
+    .explain strong { color:#d8edf1; }
+
+    .tensor-list { display:grid; gap:6px; }
+    .tensor {
+      display:grid;
+      grid-template-columns: 76px 1fr;
+      gap:9px;
+      align-items:center;
+      padding:8px 9px;
+      border:1px solid rgba(178,207,222,.11);
+      border-radius:9px;
+      background:rgba(0,0,0,.11);
+    }
+    .tensor code { font-size:10px; color:var(--parent); }
+    .tensor span { font-size:10px; color:#839ba6; line-height:1.45; }
+
+    .child-control { display:none; }
+    .child-control.visible { display:block; }
+    .range-row { display:flex; align-items:center; gap:9px; }
+    input[type="range"] { width:100%; accent-color:var(--child); }
+    .child-id { min-width:35px; color:var(--child); font:700 11px var(--mono); text-align:right; }
+
+    .callout {
+      border-left: 3px solid var(--child);
+      background: rgba(255,189,97,.06);
+      padding: 9px 10px;
+      border-radius: 0 9px 9px 0;
+      color:#aebfc7;
+      font-size:10px;
+      line-height:1.58;
+    }
+
+    .below {
+      display:grid;
+      grid-template-columns: 1.08fr .92fr;
+      gap:14px;
+      margin-top:14px;
+    }
+
+    .section { padding:18px; }
+    .section h2 { margin:0; font-size:18px; letter-spacing:-.02em; }
+    .section-lead { margin:7px 0 15px; color:var(--muted); font-size:11px; line-height:1.7; }
+
+    .compare {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .compare-col {
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:13px;
+      background:rgba(255,255,255,.025);
+    }
+    .compare-col h3 { margin:0 0 10px; font-size:12px; }
+    .mini-flow {
+      display:grid;
+      grid-template-columns:auto 20px 1fr;
+      align-items:center;
+      gap:7px;
+      margin:7px 0;
+      color:#91a7b2;
+      font-size:10px;
+    }
+    .mini-node { padding:7px 8px; border:1px solid var(--line); border-radius:8px; color:#d8e7ed; text-align:center; }
+    .mini-arrow { color:#59717d; text-align:center; }
+    .compare-col p { margin:10px 0 0; color:#8097a2; font-size:10px; line-height:1.6; }
+
+    .truth-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .truth {
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:11px;
+      background:rgba(255,255,255,.023);
+    }
+    .truth b { display:block; font-size:11px; margin-bottom:5px; }
+    .truth p { margin:0; color:#849ca7; font-size:10px; line-height:1.6; }
+    .truth.good b { color:var(--good); }
+    .truth.bad b { color:var(--warn); }
+
+    .footnote {
+      margin-top:14px;
+      padding:11px 13px;
+      border:1px dashed rgba(178,207,222,.19);
+      border-radius:12px;
+      color:#718995;
+      font-size:10px;
+      line-height:1.65;
+    }
+
+    @keyframes dash { to { stroke-dashoffset:-22; } }
+    .animated-flow { stroke-dasharray:7 7; animation:dash 1.2s linear infinite; }
+    @keyframes breathe { 50% { transform:scale(1.04); } }
+    .breathe { animation:breathe 1.7s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
+
+    @media (max-width: 1220px) {
+      .lab { grid-template-columns:210px minmax(0,1fr); }
+      .inspector { grid-column:1 / -1; min-height:0; }
+      .inspect-body { grid-template-columns:repeat(3,1fr); }
+    }
+
+    @media (max-width: 820px) {
+      .topbar { display:block; }
+      .legend { justify-content:flex-start; margin-top:12px; }
+      .lab { grid-template-columns:1fr; }
+      .sidebar { min-height:0; }
+      .nav { grid-template-columns:repeat(5,1fr); }
+      .nav-btn { display:block; text-align:center; padding:8px 4px; }
+      .nav-num { margin:0 auto 5px; }
+      .nav-copy span { display:none; }
+      .side-controls { margin-top:10px; }
+      .workspace { min-height:0; }
+      .formula-strip { grid-template-columns:1fr; }
+      .inspect-body { grid-template-columns:1fr; }
+      .below { grid-template-columns:1fr; }
+      .compare, .truth-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow"><span class="pulse"></span>S2GO Representation Lab</div>
+        <h1>一条 Query，如何展开成一簇 3D Gaussians？</h1>
+        <p class="subtitle">
+          逐步观察 parent query 如何先决定局部结构的公共状态，再由 child decoder 展开形状 primitives，最后经 opacity-aware G2V 形成 semantic occupancy。
+        </p>
+      </div>
+      <div class="legend" aria-label="颜色图例">
+        <span class="pill"><i class="dot query"></i>Query state</span>
+        <span class="pill"><i class="dot parent"></i>Parent attributes</span>
+        <span class="pill"><i class="dot child"></i>Child Gaussians</span>
+        <span class="pill"><i class="dot voxel"></i>Voxel output</span>
+      </div>
+    </header>
+
+    <section class="lab">
+      <aside class="card sidebar">
+        <div>
+          <div class="nav-label">逐步解码</div>
+          <nav class="nav" id="stageNav">
+            <button class="nav-btn active" data-stage="0">
+              <span class="nav-num">01</span>
+              <span class="nav-copy"><strong>Refined Query</strong><span>视觉与历史信息汇入父状态</span></span>
+            </button>
+            <button class="nav-btn" data-stage="1">
+              <span class="nav-num">02</span>
+              <span class="nav-copy"><strong>Parent Head</strong><span>位置、存在性、语义与运动</span></span>
+            </button>
+            <button class="nav-btn" data-stage="2">
+              <span class="nav-num">03</span>
+              <span class="nav-copy"><strong>Child Decoder</strong><span>一次性输出 J 组局部参数</span></span>
+            </button>
+            <button class="nav-btn" data-stage="3">
+              <span class="nav-num">04</span>
+              <span class="nav-copy"><strong>Gaussian Bundle</strong><span>公共状态 + child-specific 形状</span></span>
+            </button>
+            <button class="nav-btn" data-stage="4">
+              <span class="nav-num">05</span>
+              <span class="nav-copy"><strong>G2V Occupancy</strong><span>连续 primitives 聚合到规则体素</span></span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="side-controls">
+          <div class="mini-title">论文配置</div>
+          <div class="seg" id="modelToggle">
+            <button class="active" data-model="small">Small</button>
+            <button data-model="base">Base</button>
+          </div>
+          <div class="stats">
+            <div class="stat"><b id="kStat">900</b><span>Parent K</span></div>
+            <div class="stat"><b id="jStat">10</b><span>Children J</span></div>
+            <div class="stat"><b id="gStat">9k</b><span>Gaussians</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="card workspace">
+        <div class="work-head">
+          <div class="work-title">
+            <strong id="workTitle">01 · Refined Query</strong>
+            <span id="workSub">Transformer 只更新少量 parent queries</span>
+          </div>
+          <div class="actions">
+            <button class="btn" id="resetBtn">重置</button>
+            <button class="btn primary" id="nextBtn">下一步 →</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <svg viewBox="0 0 920 510" role="img" aria-label="S2GO query 到 Gaussian 再到 occupancy 的交互图">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#72909c" />
+              </marker>
+              <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="4" result="b" />
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="warmGlow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="3" result="b" />
+                <feFlood flood-color="#ffad5d" flood-opacity=".55" />
+                <feComposite in2="b" operator="in" />
+                <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <linearGradient id="qGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#69ecd0"/><stop offset="1" stop-color="#238ca1"/>
+              </linearGradient>
+              <linearGradient id="pGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#b49bff"/><stop offset="1" stop-color="#6655bc"/>
+              </linearGradient>
+              <linearGradient id="vGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#78c5ff" stop-opacity=".86"/><stop offset="1" stop-color="#3276c4" stop-opacity=".34"/>
+              </linearGradient>
+            </defs>
+
+            <g opacity=".28">
+              <path d="M55 405 L455 220 L873 397" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M76 426 L467 243 L850 420" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M138 455 L505 270" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M282 455 L550 320" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M436 455 L604 370" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M588 455 L666 417" stroke="#78909a" stroke-width="1" fill="none"/>
+              <path d="M742 454 L730 449" stroke="#78909a" stroke-width="1" fill="none"/>
+            </g>
+
+            <path id="flow1" class="flow" d="M198 252 C240 252 253 252 289 252"/>
+            <path id="flow2" class="flow" d="M410 252 C453 252 461 252 497 252"/>
+            <path id="flow3" class="flow" d="M680 252 C717 252 731 252 757 252"/>
+
+            <g id="queryNode" class="node hot">
+              <circle cx="142" cy="252" r="57" fill="rgba(98,226,198,.07)" stroke="rgba(98,226,198,.32)"/>
+              <circle cx="142" cy="252" r="35" fill="url(#qGrad)" opacity=".92"/>
+              <path d="M127 248 L139 236 L157 244 L160 262 L144 271 L126 263 Z" fill="none" stroke="#e7fffa" stroke-width="1.6" opacity=".83"/>
+              <text x="142" y="330" text-anchor="middle" class="svg-label">Refined Query</text>
+              <text x="142" y="348" text-anchor="middle" class="svg-mono">(qᵢ, pᵢ)</text>
+              <text x="142" y="178" text-anchor="middle" class="svg-small">current image + past memory</text>
+            </g>
+
+            <g id="parentNode" class="node dim">
+              <rect x="292" y="181" width="122" height="142" rx="20" fill="rgba(173,145,255,.07)" stroke="rgba(173,145,255,.34)"/>
+              <circle cx="353" cy="226" r="24" fill="url(#pGrad)"/>
+              <text x="353" y="230" text-anchor="middle" fill="#f1ecff" font-size="11" font-weight="800">PARENT</text>
+              <text x="312" y="273" class="svg-mono">offset  oᵢ</text>
+              <text x="312" y="290" class="svg-mono">opacity aᵢ</text>
+              <text x="312" y="307" class="svg-mono">vᵢ, cᵢ</text>
+              <text x="353" y="347" text-anchor="middle" class="svg-label">Shared State</text>
+            </g>
+
+            <g id="childNode" class="node dim">
+              <ellipse class="child-shape" data-child="1" cx="535" cy="205" rx="35" ry="13" transform="rotate(-25 535 205)" fill="rgba(255,189,97,.29)" stroke="#ffc46c" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="2" cx="588" cy="198" rx="28" ry="16" transform="rotate(18 588 198)" fill="rgba(255,149,83,.26)" stroke="#ff9f5b" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="3" cx="630" cy="225" rx="31" ry="12" transform="rotate(-5 630 225)" fill="rgba(255,189,97,.26)" stroke="#ffc46c" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="4" cx="524" cy="254" rx="30" ry="14" transform="rotate(12 524 254)" fill="rgba(255,135,77,.26)" stroke="#ff9456" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="5" cx="576" cy="247" rx="37" ry="18" transform="rotate(-13 576 247)" fill="rgba(255,189,97,.34)" stroke="#ffd084" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="6" cx="633" cy="267" rx="34" ry="14" transform="rotate(27 633 267)" fill="rgba(255,135,77,.25)" stroke="#ff9456" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="7" cx="539" cy="299" rx="32" ry="13" transform="rotate(-31 539 299)" fill="rgba(255,189,97,.27)" stroke="#ffc46c" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="8" cx="589" cy="301" rx="29" ry="17" transform="rotate(9 589 301)" fill="rgba(255,142,79,.27)" stroke="#ff9858" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="9" cx="628" cy="315" rx="27" ry="11" transform="rotate(-12 628 315)" fill="rgba(255,189,97,.25)" stroke="#ffc46c" stroke-width="1.5"/>
+              <ellipse class="child-shape" data-child="10" cx="663" cy="287" rx="24" ry="10" transform="rotate(35 663 287)" fill="rgba(255,142,79,.25)" stroke="#ff9858" stroke-width="1.5"/>
+              <g id="extraChildren" opacity="0">
+                <ellipse cx="510" cy="222" rx="19" ry="8" transform="rotate(40 510 222)" fill="rgba(255,189,97,.22)" stroke="#ffc46c"/>
+                <ellipse cx="557" cy="181" rx="18" ry="7" fill="rgba(255,142,79,.22)" stroke="#ff9858"/>
+                <ellipse cx="612" cy="181" rx="18" ry="8" transform="rotate(-30 612 181)" fill="rgba(255,189,97,.22)" stroke="#ffc46c"/>
+                <ellipse cx="665" cy="240" rx="20" ry="8" transform="rotate(20 665 240)" fill="rgba(255,142,79,.22)" stroke="#ff9858"/>
+                <ellipse cx="497" cy="282" rx="19" ry="8" transform="rotate(-12 497 282)" fill="rgba(255,189,97,.22)" stroke="#ffc46c"/>
+                <ellipse cx="514" cy="325" rx="18" ry="8" transform="rotate(25 514 325)" fill="rgba(255,142,79,.22)" stroke="#ff9858"/>
+                <ellipse cx="565" cy="329" rx="18" ry="8" fill="rgba(255,189,97,.22)" stroke="#ffc46c"/>
+                <ellipse cx="610" cy="340" rx="18" ry="8" transform="rotate(22 610 340)" fill="rgba(255,142,79,.22)" stroke="#ff9858"/>
+                <ellipse cx="651" cy="330" rx="18" ry="8" transform="rotate(-18 651 330)" fill="rgba(255,189,97,.22)" stroke="#ffc46c"/>
+                <ellipse cx="680" cy="262" rx="17" ry="7" transform="rotate(-25 680 262)" fill="rgba(255,142,79,.22)" stroke="#ff9858"/>
+              </g>
+              <circle cx="576" cy="259" r="5" fill="#b99fff" stroke="#eee9ff"/>
+              <text x="588" y="375" text-anchor="middle" class="svg-label">J Child Gaussians</text>
+              <text x="588" y="393" text-anchor="middle" class="svg-mono">{oᵢⱼ, rᵢⱼ, sᵢⱼ, aᵢⱼ}</text>
+            </g>
+
+            <g id="voxelNode" class="node dim">
+              <g transform="translate(768 183) skewY(-12)">
+                <rect x="0" y="0" width="95" height="142" fill="rgba(110,184,255,.05)" stroke="rgba(110,184,255,.38)"/>
+                <path d="M19 0V142 M38 0V142 M57 0V142 M76 0V142 M0 24H95 M0 48H95 M0 72H95 M0 96H95 M0 120H95" stroke="rgba(110,184,255,.2)" fill="none"/>
+                <rect x="38" y="48" width="19" height="24" fill="rgba(255,189,97,.48)"/>
+                <rect x="57" y="48" width="19" height="24" fill="rgba(255,135,77,.46)"/>
+                <rect x="38" y="72" width="19" height="24" fill="rgba(255,189,97,.56)"/>
+                <rect x="57" y="72" width="19" height="24" fill="rgba(255,189,97,.37)"/>
+                <rect x="19" y="72" width="19" height="24" fill="rgba(110,184,255,.32)"/>
+                <rect x="76" y="72" width="19" height="24" fill="rgba(110,184,255,.22)"/>
+                <rect x="38" y="96" width="19" height="24" fill="rgba(110,184,255,.24)"/>
+              </g>
+              <text x="818" y="353" text-anchor="middle" class="svg-label">Semantic Occupancy</text>
+              <text x="818" y="371" text-anchor="middle" class="svg-mono">Pocc(x), e(x)</text>
+            </g>
+          </svg>
+
+          <div class="stage-caption">
+            <b id="captionTitle">STEP 01 · 高层状态</b>
+            <p id="captionText">Query feature qᵢ 携带视觉与时序信息，3D location pᵢ 提供局部参考点；现在还没有生成任何 child Gaussian。</p>
+          </div>
+        </div>
+
+        <div class="formula-strip">
+          <div class="formula">
+            <span>Current stage formula</span>
+            <code id="mainFormula">Qᵢ = (qᵢ, pᵢ)</code>
+          </div>
+          <div class="formula">
+            <span>Compute principle</span>
+            <code id="computeFormula"><em>K</em> 个 query 做 Transformer</code>
+          </div>
+        </div>
+      </section>
+
+      <aside class="card inspector">
+        <div class="inspect-head">
+          <strong id="inspectTitle">Refined Query 的信息组成</strong>
+          <span id="inspectSub">理解和几何参考点仍然分开保存</span>
+        </div>
+        <div class="inspect-body">
+          <div class="explain">
+            <h3 id="explainTitle">Query 不是 Gaussian</h3>
+            <p id="explainText">
+              <strong>qᵢ</strong> 是高维 latent feature，<strong>pᵢ</strong> 是 3D reference location。它们先通过视觉 cross-attention 与 temporal attention 被更新，随后才进入属性 heads。
+            </p>
+          </div>
+
+          <div class="explain">
+            <h3>当前 tensor</h3>
+            <div class="tensor-list" id="tensorList">
+              <div class="tensor"><code>qᵢ ∈ ℝᴰ</code><span>视觉、语义、历史上下文</span></div>
+              <div class="tensor"><code>pᵢ ∈ ℝ³</code><span>局部结构的空间参考点</span></div>
+            </div>
+          </div>
+
+          <div class="explain child-control" id="childControl">
+            <h3>检查一个 child</h3>
+            <div class="range-row">
+              <input id="childRange" type="range" min="1" max="10" value="1" step="1" />
+              <span class="child-id" id="childId">j=1</span>
+            </div>
+            <p style="margin-top:8px" id="childDetail">中心 μᵢ₁ = pᵢ + oᵢ + oᵢ₁；它继承父语义 cᵢ 与速度 vᵢ。</p>
+          </div>
+
+          <div class="callout" id="callout">
+            正常 occupancy inference 中，current query locations 来自 learnable 3D anchors；LiDAR 只在 Stage-1 预训练时用于 noisy-query denoising。
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="below">
+      <article class="card section">
+        <h2>为什么这种 hierarchy 比 one-query-one-Gaussian 快？</h2>
+        <p class="section-lead">昂贵计算只作用在 parent tokens；child primitive 主要由轻量 MLP 展开。</p>
+        <div class="compare">
+          <div class="compare-col">
+            <h3 style="color:var(--query)">S2GO：先理解，再展开</h3>
+            <div class="mini-flow"><span class="mini-node">900 queries</span><span class="mini-arrow">→</span><span>视觉/时序 Transformer</span></div>
+            <div class="mini-flow"><span class="mini-node">parent qᵢ</span><span class="mini-arrow">→</span><span>轻量 child MLP</span></div>
+            <div class="mini-flow"><span class="mini-node">9,000 G</span><span class="mini-arrow">→</span><span>只参加 G2V</span></div>
+            <p>Small 模型用 900 个高层状态生成 9,000 个低层 primitives；后者不再逐个读取多目 feature。</p>
+          </div>
+          <div class="compare-col">
+            <h3 style="color:var(--child)">GaussianFormer3D：每个 primitive 都理解</h3>
+            <div class="mini-flow"><span class="mini-node">25,600 q</span><span class="mini-arrow">→</span><span>3D deformable attention</span></div>
+            <div class="mini-flow"><span class="mini-node">qᵢ</span><span class="mini-arrow">↔</span><span>一个 Gaussian Gᵢ</span></div>
+            <div class="mini-flow"><span class="mini-node">25,600 G</span><span class="mini-arrow">→</span><span>G2V</span></div>
+            <p>每个 Gaussian query 都独立进行多轮跨相机 feature retrieval，因此更细粒度，也更昂贵。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="card section">
+        <h2>四个最容易误解的地方</h2>
+        <p class="section-lead">读图时要把“高层局部状态”和“最终实例”区分开。</p>
+        <div class="truth-grid">
+          <div class="truth bad"><b>不是 one query = one object</b><p>一条 query 可能只覆盖物体局部，也可能表示道路、墙面等 stuff 区域。</p></div>
+          <div class="truth good"><b>是 one query = one local bundle</b><p>children 共享父语义、速度和整体存在 gate，形成局部结构先验。</p></div>
+          <div class="truth bad"><b>Opacity 不是 objectness</b><p>它只表示 primitive 对占据/渲染的存在贡献，不能直接判定 instance 或 OOD。</p></div>
+          <div class="truth good"><b>Child 不做昂贵 Transformer</b><p>论文的效率来自 parent-level compression，再用 decoder 批量输出 child 参数。</p></div>
+        </div>
+        <div class="footnote">
+          论文明确给出了 parent/child 属性分解与 Gaussian 组合公式；截至整理时没有可用的官方源码，因此具体 MLP 层数、激活函数和 tensor packing 不应凭空补全。
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const stages = [
+      {
+        title: "01 · Refined Query",
+        sub: "Transformer 只更新少量 parent queries",
+        captionTitle: "STEP 01 · 高层状态",
+        caption: "Query feature qᵢ 携带视觉与时序信息，3D location pᵢ 提供局部参考点；现在还没有生成任何 child Gaussian。",
+        formula: "Qᵢ = (qᵢ, pᵢ)",
+        compute: "<em>K</em> 个 query 做 Transformer",
+        inspectTitle: "Refined Query 的信息组成",
+        inspectSub: "理解和几何参考点仍然分开保存",
+        explainTitle: "Query 不是 Gaussian",
+        explain: "<strong>qᵢ</strong> 是高维 latent feature，<strong>pᵢ</strong> 是 3D reference location。它们先通过视觉 cross-attention 与 temporal attention 被更新，随后才进入属性 heads。",
+        tensors: [["qᵢ ∈ ℝᴰ", "视觉、语义、历史上下文"], ["pᵢ ∈ ℝ³", "局部结构的空间参考点"]],
+        callout: "正常 occupancy inference 中，current query locations 来自 learnable 3D anchors；LiDAR 只在 Stage-1 预训练时用于 noisy-query denoising。",
+        hot: ["queryNode"], flow: []
+      },
+      {
+        title: "02 · Parent Head",
+        sub: "先决定整组 primitives 的公共状态",
+        captionTitle: "STEP 02 · Bundle-level attributes",
+        caption: "Parent head 根据 qᵢ 预测位置修正 oᵢ、整体 opacity aᵢ、共享 velocity vᵢ 与 semantic feature cᵢ。",
+        formula: "p̄ᵢ = pᵢ + oᵢ   ·   Parentᵢ = {aᵢ, vᵢ, cᵢ}",
+        compute: "一个 parent gate 控制整组 children",
+        inspectTitle: "Parent 决定什么？",
+        inspectSub: "组级存在性、位置、语义与运动",
+        explainTitle: "这是局部结构的公共骨架",
+        explain: "<strong>oᵢ</strong> 把 query 从 reference location 移到真实 occupied region；<strong>aᵢ</strong> 是整组 Gaussian 的存在 gate；<strong>vᵢ、cᵢ</strong> 将被所有 children 共享。",
+        tensors: [["oᵢ ∈ ℝ³", "parent center correction"], ["aᵢ ∈ [0,1]", "bundle-level opacity"], ["vᵢ ∈ ℝ³", "共享运动趋势"], ["cᵢ", "共享语义 feature/class"]],
+        callout: "共享属性提高局部一致性，但如果一条 query 横跨语义边界或多个运动物体，也会限制表达能力。",
+        hot: ["queryNode", "parentNode"], flow: ["flow1"]
+      },
+      {
+        title: "03 · Child Decoder",
+        sub: "小型 MLP 一次输出 J 组局部形状参数",
+        captionTitle: "STEP 03 · Cheap expansion",
+        caption: "Child decoder 不再运行 Transformer，而是将同一个 qᵢ 映射成 J 组 offset、rotation、scale 与 child opacity。",
+        formula: "Hchild(qᵢ) ∈ ℝᴶᵈᵍ  →  {oᵢⱼ, rᵢⱼ, sᵢⱼ, aᵢⱼ}ⱼ₌₁ᴶ",
+        compute: "Transformer on K · MLP expansion to K×J",
+        inspectTitle: "Child-specific 参数",
+        inspectSub: "负责父中心附近的细粒度几何",
+        explainTitle: "每个 child 是一个局部椭球",
+        explain: "<strong>oᵢⱼ</strong> 决定相对 parent 的位置，<strong>rᵢⱼ、sᵢⱼ</strong> 决定椭球朝向和大小，<strong>aᵢⱼ</strong> 决定这个局部 primitive 是否需要存在。",
+        tensors: [["oᵢⱼ ∈ ℝ³", "child local offset"], ["rᵢⱼ ∈ ℝ⁴", "rotation quaternion"], ["sᵢⱼ ∈ ℝ³", "anisotropic scale"], ["aᵢⱼ ∈ [0,1]", "child-level opacity"]],
+        callout: "S2GO-Small：一个 parent 输出 10 个 children；Base：一个 parent 输出 20 个 children。",
+        hot: ["queryNode", "parentNode", "childNode"], flow: ["flow1", "flow2"]
+      },
+      {
+        title: "04 · Gaussian Bundle",
+        sub: "公共状态与 child geometry 组成最终 primitives",
+        captionTitle: "STEP 04 · Compose Gaussians",
+        caption: "每个 child center 等于 query location、parent correction 和 child local offset 之和；opacity 是 parent 与 child 两级 gate 的乘积。",
+        formula: "Gᵢⱼ = { μᵢⱼ=pᵢ+oᵢ+oᵢⱼ, rᵢⱼ, sᵢⱼ, αᵢⱼ=aᵢaᵢⱼ, vᵢ, cᵢ }",
+        compute: "1 parent query → J Gaussian primitives",
+        inspectTitle: "选中任意 child 查看组成",
+        inspectSub: "child geometry 独立；semantics 与 velocity 共享",
+        explainTitle: "两级 opacity 是层级存在 gate",
+        explain: "当 <strong>aᵢ</strong> 很低时，整组 children 一起被压制；当 parent 存在时，<strong>aᵢⱼ</strong> 再决定具体哪些局部 primitives 有贡献。",
+        tensors: [["μᵢⱼ", "pᵢ + oᵢ + oᵢⱼ"], ["Σᵢⱼ", "R(rᵢⱼ) diag(sᵢⱼ²) Rᵀ"], ["αᵢⱼ", "aᵢ · aᵢⱼ"], ["(vᵢ,cᵢ)", "parent-level shared state"]],
+        callout: "这个 bundle 更像 query-conditioned local field，而不是一个已经经过 instance matching 的完整物体。",
+        hot: ["parentNode", "childNode"], flow: ["flow2"]
+      },
+      {
+        title: "05 · G2V Occupancy",
+        sub: "连续 Gaussian field 在规则 voxel centers 上求值",
+        captionTitle: "STEP 05 · Opacity-aware aggregation",
+        caption: "每个 Gaussian 对附近 voxel 提供空间响应与语义；occupied probability 用 1−∏(1−αg) 聚合，再输出标准 semantic occupancy。",
+        formula: "Pocc(x) = 1 − ∏ᵢⱼ [1 − αᵢⱼ gᵢⱼ(x)]",
+        compute: "K×J Gaussians → dense voxel occupancy",
+        inspectTitle: "为什么还要 G2V？",
+        inspectSub: "Gaussian 是中间连续表示，不是最终输出",
+        explainTitle: "同一 field 可以在不同 voxel grid 上采样",
+        explain: "Gaussian 提供连续几何；G2V 把它转换成 benchmark、规划与监督需要的规则网格。Opacity 同时参与 rendering 和 occupancy，避免两个分支对“是否存在”产生不一致。",
+        tensors: [["gᵢⱼ(x)", "Gaussian spatial response"], ["αᵢⱼgᵢⱼ(x)", "occupied contribution"], ["Pocc(x)", "所有 primitives 的联合占据"], ["e(x)", "语义加权聚合"]],
+        callout: "Opacity 只表示占据贡献，不等于 objectness，也不等于 OOD novelty。",
+        hot: ["childNode", "voxelNode"], flow: ["flow3"]
+      }
+    ];
+
+    let stage = 0;
+    let model = "small";
+    const navButtons = [...document.querySelectorAll(".nav-btn")];
+    const allNodes = ["queryNode", "parentNode", "childNode", "voxelNode"];
+    const allFlows = ["flow1", "flow2", "flow3"];
+
+    function renderTensors(items) {
+      document.getElementById("tensorList").innerHTML = items.map(([a,b]) =>
+        `<div class="tensor"><code>${a}</code><span>${b}</span></div>`
+      ).join("");
+    }
+
+    function renderStage(nextStage) {
+      stage = nextStage;
+      const s = stages[stage];
+      navButtons.forEach((b,i) => b.classList.toggle("active", i === stage));
+      document.getElementById("workTitle").textContent = s.title;
+      document.getElementById("workSub").textContent = s.sub;
+      document.getElementById("captionTitle").textContent = s.captionTitle;
+      document.getElementById("captionText").textContent = s.caption;
+      document.getElementById("mainFormula").textContent = s.formula;
+      document.getElementById("computeFormula").innerHTML = s.compute;
+      document.getElementById("inspectTitle").textContent = s.inspectTitle;
+      document.getElementById("inspectSub").textContent = s.inspectSub;
+      document.getElementById("explainTitle").textContent = s.explainTitle;
+      document.getElementById("explainText").innerHTML = s.explain;
+      document.getElementById("callout").textContent = s.callout;
+      renderTensors(s.tensors);
+      allNodes.forEach(id => {
+        const el = document.getElementById(id);
+        el.classList.toggle("dim", !s.hot.includes(id));
+        el.classList.toggle("hot", s.hot.includes(id));
+        el.classList.toggle("breathe", s.hot.includes(id) && id === s.hot[s.hot.length-1]);
+      });
+      allFlows.forEach(id => {
+        const el = document.getElementById(id);
+        const on = s.flow.includes(id);
+        el.classList.toggle("hot", on);
+        el.classList.toggle("animated-flow", on);
+      });
+      document.getElementById("childControl").classList.toggle("visible", stage === 3);
+      document.getElementById("nextBtn").textContent = stage === stages.length-1 ? "回到开头 ↺" : "下一步 →";
+    }
+
+    function renderModel(nextModel) {
+      model = nextModel;
+      const base = model === "base";
+      document.querySelectorAll("#modelToggle button").forEach(b => b.classList.toggle("active", b.dataset.model === model));
+      document.getElementById("kStat").textContent = base ? "1,800" : "900";
+      document.getElementById("jStat").textContent = base ? "20" : "10";
+      document.getElementById("gStat").textContent = base ? "36k" : "9k";
+      document.getElementById("extraChildren").setAttribute("opacity", base ? ".9" : "0");
+      document.getElementById("childRange").max = base ? "20" : "10";
+      const current = Math.min(Number(document.getElementById("childRange").value), base ? 20 : 10);
+      document.getElementById("childRange").value = current;
+      updateChild(current);
+    }
+
+    function updateChild(value) {
+      const j = Number(value);
+      document.getElementById("childId").textContent = `j=${j}`;
+      document.getElementById("childDetail").textContent = `中心 μᵢ${j} = pᵢ + oᵢ + oᵢ${j}；它继承父语义 cᵢ 与速度 vᵢ，最终 opacity 为 aᵢ·aᵢ${j}。`;
+      document.querySelectorAll(".child-shape").forEach(e => e.classList.toggle("selected", Number(e.dataset.child) === j));
+    }
+
+    navButtons.forEach(b => b.addEventListener("click", () => renderStage(Number(b.dataset.stage))));
+    document.querySelectorAll("#modelToggle button").forEach(b => b.addEventListener("click", () => renderModel(b.dataset.model)));
+    document.getElementById("nextBtn").addEventListener("click", () => renderStage((stage + 1) % stages.length));
+    document.getElementById("resetBtn").addEventListener("click", () => { renderModel("small"); renderStage(0); });
+    document.getElementById("childRange").addEventListener("input", e => updateChild(e.target.value));
+    document.querySelectorAll(".child-shape").forEach(e => e.addEventListener("click", () => {
+      if (stage !== 3) renderStage(3);
+      document.getElementById("childRange").value = e.dataset.child;
+      updateChild(e.dataset.child);
+    }));
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowRight") renderStage((stage + 1) % stages.length);
+      if (e.key === "ArrowLeft") renderStage((stage - 1 + stages.length) % stages.length);
+    });
+
+    renderModel("small");
+    renderStage(0);
+  </script>
+</body>
+</html>

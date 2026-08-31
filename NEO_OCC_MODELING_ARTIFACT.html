@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>NEO-Occ Modeling Lab — BEV 开放世界占据建模</title>
+  <style>
+    :root {
+      --bg: #06101d;
+      --bg-2: #081625;
+      --panel: rgba(13, 27, 43, 0.88);
+      --panel-solid: #0d1b2b;
+      --panel-hi: #10243a;
+      --line: rgba(152, 184, 210, 0.16);
+      --line-hi: rgba(152, 184, 210, 0.34);
+      --text: #edf6ff;
+      --muted: #90a7bb;
+      --cyan: #4ee6d8;
+      --cyan-2: #1db7c6;
+      --green: #77e59b;
+      --amber: #ffc45b;
+      --red: #ff747f;
+      --violet: #a58cff;
+      --blue: #6ab7ff;
+      --road: #27394d;
+      --support: #57c7aa;
+      --entity-car: #5fafff;
+      --entity-new: #ffb34f;
+      --residual: #739087;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+      --radius: 18px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 16% 0%, rgba(52, 138, 172, 0.16), transparent 31%),
+        radial-gradient(circle at 86% 12%, rgba(125, 82, 190, 0.12), transparent 25%),
+        linear-gradient(160deg, var(--bg), #050b14 74%);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.16;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, black, transparent 92%);
+    }
+
+    button { font: inherit; }
+
+    .app {
+      width: min(1540px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 24px 0 38px;
+      position: relative;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 18px var(--cyan);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 44px);
+      line-height: 1.06;
+      letter-spacing: -.045em;
+      font-weight: 760;
+    }
+
+    .subtitle {
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+      margin: 10px 0 0;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-top: 4px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      color: #d8e7f2;
+      background: rgba(12, 28, 44, .76);
+      border-radius: 11px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: .18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .btn:hover, .btn:focus-visible {
+      outline: none;
+      border-color: rgba(78, 230, 216, .48);
+      background: rgba(20, 50, 69, .9);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(51, 194, 188, .22), rgba(28, 120, 148, .25));
+      color: #dffffa;
+      border-color: rgba(78, 230, 216, .38);
+    }
+
+    .btn.active {
+      background: rgba(78, 230, 216, .17);
+      border-color: rgba(78, 230, 216, .58);
+      color: #e9fffc;
+    }
+
+    .icon {
+      width: 15px;
+      height: 15px;
+      display: inline-grid;
+      place-items: center;
+      opacity: .94;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.78fr) minmax(330px, .82fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      background: linear-gradient(165deg, rgba(17, 36, 56, .9), rgba(8, 20, 33, .9));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .stage-panel {
+      height: 665px;
+      min-height: 665px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-head {
+      min-height: 59px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(12, 27, 42, .62);
+    }
+
+    .panel-title {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .panel-title strong {
+      font-size: 13px;
+      letter-spacing: .01em;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .segmented {
+      padding: 3px;
+      border: 1px solid var(--line);
+      background: rgba(2, 10, 18, .44);
+      border-radius: 10px;
+      display: flex;
+      gap: 2px;
+    }
+
+    .seg-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      transition: .16s ease;
+    }
+
+    .seg-btn.active {
+      color: white;
+      background: #193047;
+      box-shadow: 0 2px 8px rgba(0,0,0,.22);
+    }
+
+    .canvas-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 515px;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(49, 109, 137, .09), transparent 45%),
+        linear-gradient(180deg, rgba(5, 17, 29, .42), rgba(4, 12, 21, .68));
+      overflow: hidden;
+    }
+
+    .canvas-wrap svg {
+      width: 100%;
+      height: 100%;
+      min-height: 515px;
+      display: block;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .legend {
+      position: absolute;
+      left: 16px;
+      bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 13px;
+      padding: 8px 10px;
+      background: rgba(3, 12, 21, .78);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: #b6c8d6;
+      font-size: 10px;
+      pointer-events: none;
+    }
+
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 3px; }
+
+    .canvas-hint {
+      position: absolute;
+      right: 15px;
+      top: 14px;
+      color: #91a8ba;
+      font-size: 10px;
+      letter-spacing: .04em;
+      padding: 7px 9px;
+      border-radius: 8px;
+      background: rgba(4, 14, 23, .72);
+      border: 1px solid var(--line);
+      pointer-events: none;
+    }
+
+    .stage-caption {
+      min-height: 89px;
+      border-top: 1px solid var(--line);
+      padding: 14px 18px 15px;
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 15px;
+      background: rgba(7, 19, 31, .84);
+    }
+
+    .stage-kicker {
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding-top: 3px;
+    }
+
+    .stage-copy strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .stage-copy p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.58; }
+
+    .inspector {
+      height: 665px;
+      min-height: 665px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .object-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 11px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 18, 30, .56);
+    }
+
+    .object-tab {
+      border: 1px solid transparent;
+      background: rgba(20, 40, 58, .58);
+      color: #9fb3c3;
+      padding: 8px 5px;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      transition: .16s ease;
+    }
+
+    .object-tab:hover { color: white; background: rgba(28, 55, 77, .8); }
+    .object-tab.active {
+      color: white;
+      border-color: rgba(78, 230, 216, .44);
+      background: rgba(36, 106, 111, .38);
+      box-shadow: inset 0 0 0 1px rgba(78,230,216,.08);
+    }
+
+    .inspect-scroll {
+      padding: 16px;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .object-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .object-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .object-color {
+      width: 13px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--amber);
+      box-shadow: 0 0 19px rgba(255, 180, 79, .38);
+    }
+
+    .object-name h2 {
+      margin: 0 0 3px;
+      font-size: 19px;
+      letter-spacing: -.025em;
+    }
+
+    .object-name p { margin: 0; color: var(--muted); font-size: 11px; }
+
+    .badge {
+      padding: 6px 8px;
+      border: 1px solid rgba(255, 196, 91, .42);
+      background: rgba(255, 177, 65, .11);
+      color: #ffd993;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 760;
+      letter-spacing: .05em;
+      white-space: nowrap;
+    }
+
+    .badge.known { color: #bde1ff; background: rgba(75,151,222,.12); border-color: rgba(95,175,255,.4); }
+    .badge.field { color: #b5d4c6; background: rgba(100,160,132,.12); border-color: rgba(111,161,135,.4); }
+    .badge.support { color: #c2ffec; background: rgba(73,197,161,.1); border-color: rgba(87,199,170,.4); }
+
+    .layer-stack {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+
+    .layer-row {
+      display: grid;
+      grid-template-columns: 23px 79px 1fr;
+      gap: 8px;
+      align-items: center;
+      min-height: 38px;
+      padding: 7px 9px;
+      background: rgba(17, 36, 53, .62);
+      border: 1px solid rgba(151, 181, 204, .11);
+      border-radius: 10px;
+      transition: .18s ease;
+    }
+
+    .layer-row.highlight {
+      background: rgba(27, 65, 75, .58);
+      border-color: rgba(78,230,216,.28);
+      transform: translateX(2px);
+    }
+
+    .layer-index {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(104, 141, 169, .13);
+      color: #a8c0d2;
+      font-family: var(--mono);
+      font-size: 9px;
+    }
+
+    .layer-label { color: #9fb4c4; font-size: 10px; font-weight: 700; }
+    .layer-value { color: #edf7ff; font-size: 11px; font-weight: 650; text-align: right; }
+
+    .mini-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #c5d6e3;
+      font-size: 11px;
+      font-weight: 720;
+      margin: 15px 0 8px;
+    }
+
+    .mini-title span { color: var(--muted); font-weight: 520; font-size: 9px; }
+
+    .density-card {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(5, 15, 25, .55);
+      padding: 9px;
+    }
+
+    .density-card svg { width: 100%; height: 118px; display: block; }
+
+    .bars { display: grid; gap: 6px; margin-top: 9px; }
+    .bar-row { display: grid; grid-template-columns: 57px 1fr 31px; gap: 7px; align-items: center; }
+    .bar-label { color: #a9bdcc; font-size: 9px; }
+    .bar-track { height: 6px; border-radius: 999px; background: #14283b; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0; border-radius: inherit; transition: width .42s cubic-bezier(.2,.8,.2,1); }
+    .bar-value { font: 9px var(--mono); color: #d8e8f4; text-align: right; }
+
+    .equation {
+      margin-top: 13px;
+      border: 1px solid var(--line);
+      background: rgba(3, 12, 21, .68);
+      border-radius: 11px;
+      padding: 11px 12px;
+    }
+
+    .equation-label { color: var(--cyan); font: 9px var(--mono); letter-spacing: .06em; margin-bottom: 7px; }
+    .equation-code { color: #d9edf5; font: 11px/1.65 var(--mono); overflow-wrap: anywhere; }
+    .equation-note { color: var(--muted); font-size: 10px; line-height: 1.5; margin-top: 7px; }
+
+    .pipeline {
+      margin-top: 14px;
+      padding: 11px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 7px;
+    }
+
+    .step {
+      position: relative;
+      min-height: 92px;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: rgba(12, 28, 43, .74);
+      color: #bdcfdb;
+      padding: 12px 12px 10px;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: .18s ease;
+      overflow: hidden;
+    }
+
+    .step::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 100%;
+      bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--blue));
+      transition: right .25s ease;
+    }
+
+    .step:hover { border-color: var(--line-hi); transform: translateY(-1px); }
+    .step.active {
+      border-color: rgba(78,230,216,.48);
+      background: linear-gradient(145deg, rgba(34, 81, 91, .68), rgba(17, 38, 57, .82));
+      color: white;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+    }
+    .step.active::after { right: 0; }
+    .step.done::after { right: 0; opacity: .28; }
+
+    .step-no { color: var(--cyan); font: 9px var(--mono); letter-spacing: .08em; }
+    .step strong { display: block; margin: 7px 0 4px; font-size: 12px; }
+    .step span { color: var(--muted); font-size: 9px; line-height: 1.45; display: block; }
+
+    .footer-note {
+      color: #6f8799;
+      font-size: 10px;
+      text-align: center;
+      margin-top: 12px;
+      letter-spacing: .02em;
+    }
+
+    /* SVG visuals */
+    .scene-object { cursor: pointer; transition: opacity .18s ease, filter .18s ease; }
+    .scene-object:hover { filter: brightness(1.18); }
+    .scene-object.selected .selection-ring { opacity: 1; stroke-dashoffset: 0; }
+    .selection-ring {
+      opacity: 0;
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 2.5;
+      stroke-dasharray: 7 5;
+      stroke-dashoffset: 20;
+      filter: url(#glow);
+      transition: opacity .2s ease, stroke-dashoffset .55s ease;
+      pointer-events: none;
+    }
+
+    .proposal-layer, .ownership-layer, .semantic-layer, .evidence-layer { opacity: 0; transition: opacity .36s ease; pointer-events: none; }
+    .app[data-step="1"] .evidence-layer,
+    .app[data-step="2"] .evidence-layer,
+    .app[data-step="3"] .evidence-layer,
+    .app[data-step="4"] .evidence-layer { opacity: 1; }
+    .app[data-step="2"] .proposal-layer { opacity: 1; }
+    .app[data-step="3"] .ownership-layer,
+    .app[data-step="4"] .ownership-layer { opacity: 1; }
+    .app[data-step="4"] .semantic-layer { opacity: 1; }
+
+    .app[data-step="2"] .raw-object { opacity: .7; }
+    .app[data-step="3"] .raw-object, .app[data-step="4"] .raw-object { opacity: .6; }
+
+    .ray { stroke: rgba(93, 227, 210, .44); stroke-width: 1.35; stroke-dasharray: 4 5; }
+    .ray-hit { fill: var(--cyan); filter: url(#softGlow); }
+    .proposal { fill: rgba(165,140,255,.055); stroke: var(--violet); stroke-width: 2; stroke-dasharray: 9 7; }
+    .proposal.secondary { stroke: #df8cff; opacity: .78; }
+    .proposal-label { fill: #d9ccff; font: 10px var(--mono); }
+    .owner-mask-known { fill: rgba(95,175,255,.16); stroke: var(--entity-car); stroke-width: 2; }
+    .owner-mask-new { fill: rgba(255,179,79,.18); stroke: var(--entity-new); stroke-width: 2; }
+    .owner-mask-residual { fill: rgba(115,144,135,.16); stroke: var(--residual); stroke-width: 1.8; stroke-dasharray: 6 5; }
+    .semantic-link { stroke: rgba(255,196,91,.72); stroke-width: 1.7; stroke-dasharray: 3 4; }
+    .semantic-known { stroke: rgba(95,175,255,.74); }
+    .tag-bg { fill: rgba(5,15,25,.9); stroke: rgba(177,205,225,.18); }
+    .tag-text { fill: #dcebf5; font: 10px var(--sans); font-weight: 650; }
+    .tag-sub { fill: #8fa8bb; font: 8px var(--mono); }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(1, 7, 13, .76);
+      backdrop-filter: blur(14px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: min(930px, 100%);
+      max-height: min(760px, calc(100vh - 40px));
+      overflow: auto;
+      background: linear-gradient(160deg, #11243a, #081421);
+      border: 1px solid var(--line-hi);
+      border-radius: 20px;
+      box-shadow: 0 28px 100px rgba(0,0,0,.55);
+      transform: translateY(8px) scale(.985);
+      transition: transform .22s ease;
+    }
+    .modal-backdrop.open .modal { transform: translateY(0) scale(1); }
+    .modal-head { display:flex; justify-content:space-between; gap:15px; align-items:flex-start; padding:20px 22px 14px; border-bottom:1px solid var(--line); }
+    .modal-head h2 { margin:0 0 5px; font-size:21px; }
+    .modal-head p { margin:0; color:var(--muted); font-size:12px; }
+    .close { width:32px; height:32px; padding:0; border-radius:10px; justify-content:center; }
+    .modal-body { padding:20px 22px 24px; }
+
+    .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .compare-card { border:1px solid var(--line); background:rgba(5,16,26,.58); border-radius:15px; padding:17px; }
+    .compare-card.good { border-color:rgba(78,230,216,.28); }
+    .compare-label { font:10px var(--mono); color:var(--red); letter-spacing:.08em; }
+    .compare-card.good .compare-label { color:var(--cyan); }
+    .compare-card h3 { margin:8px 0 13px; font-size:16px; }
+    .flow-node { padding:10px 11px; border:1px solid var(--line); background:#12273b; border-radius:10px; font-size:11px; text-align:center; }
+    .flow-arrow { color:#648096; text-align:center; font-size:15px; line-height:23px; }
+    .failure { margin-top:13px; color:#ffc1c7; background:rgba(255,116,127,.08); border:1px solid rgba(255,116,127,.2); padding:10px; border-radius:10px; font-size:10px; line-height:1.55; }
+    .compare-card.good .failure { color:#bdfff1; background:rgba(78,230,216,.07); border-color:rgba(78,230,216,.18); }
+
+    .symbol-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:9px; }
+    .symbol { padding:12px; border:1px solid var(--line); border-radius:11px; background:rgba(7,19,31,.62); display:grid; grid-template-columns:70px 1fr; gap:10px; align-items:center; }
+    .symbol code { color:var(--cyan); font:13px var(--mono); }
+    .symbol div { color:#afc2d0; font-size:11px; line-height:1.5; }
+
+    @media (max-width: 1050px) {
+      .layout { grid-template-columns: 1fr; }
+      .stage-panel, .inspector { height: auto; min-height: auto; }
+      .inspector { max-height: none; }
+      .inspect-scroll { overflow: visible; }
+      .pipeline { grid-template-columns: repeat(5, minmax(135px, 1fr)); overflow-x: auto; }
+      .topbar { flex-direction: column; }
+      .top-actions { justify-content: flex-start; }
+    }
+
+    @media (max-width: 680px) {
+      .app { width: min(100% - 16px, 1540px); padding-top: 14px; }
+      .panel-head { align-items:flex-start; flex-direction:column; }
+      .stage-caption { grid-template-columns:1fr; gap:4px; }
+      .object-tabs { grid-template-columns:repeat(2,1fr); }
+      .compare-grid, .symbol-grid { grid-template-columns:1fr; }
+      .canvas-wrap, .canvas-wrap svg { min-height: 430px; }
+      .legend { max-width:calc(100% - 30px); }
+      .canvas-hint { display:none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app" data-step="0">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow"><span class="eyebrow-dot"></span>Interactive modeling artifact</div>
+        <h1>BEV 开放世界占据：从物理场到 Entity</h1>
+        <p class="subtitle">把 free / occupied、observed / unobserved、entity ownership 与 known / new 分成不同随机变量。点击场景对象，沿着底部五个步骤观察它如何被建模。</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="compareBtn"><span class="icon">⇄</span>对比 2D 检测</button>
+        <button class="btn" id="symbolBtn"><span class="icon">ƒ</span>变量表</button>
+        <button class="btn primary" id="tourBtn"><span class="icon">▶</span>自动演示</button>
+        <button class="btn" id="fullBtn"><span class="icon">⛶</span>全屏</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <article class="panel stage-panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <strong>世界画布</strong>
+            <span>不是“图像里的类别”，而是带高度、证据和归属关系的世界状态</span>
+          </div>
+          <div class="segmented" aria-label="视图切换">
+            <button class="seg-btn active" data-view="bev">BEV 俯视</button>
+            <button class="seg-btn" data-view="side">高度侧视</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <svg class="view active" id="bevView" viewBox="0 0 920 515" role="img" aria-label="可交互 BEV 道路场景">
+            <defs>
+              <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M 28 0 L 0 0 0 28" fill="none" stroke="rgba(163,193,214,.075)" stroke-width="1"/>
+              </pattern>
+              <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="2.2" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <linearGradient id="roadGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#213246"/>
+                <stop offset=".5" stop-color="#2b4055"/>
+                <stop offset="1" stop-color="#213246"/>
+              </linearGradient>
+              <linearGradient id="sofaGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f1a650"/>
+                <stop offset="1" stop-color="#bb653b"/>
+              </linearGradient>
+              <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L7,3 z" fill="#4ee6d8"/>
+              </marker>
+            </defs>
+
+            <rect width="920" height="515" fill="url(#grid)"/>
+
+            <!-- environment / support surface -->
+            <g id="supportLayer">
+              <rect x="120" y="0" width="680" height="515" rx="4" fill="url(#roadGrad)"/>
+              <rect x="95" y="0" width="25" height="515" fill="#495664"/>
+              <rect x="800" y="0" width="25" height="515" fill="#495664"/>
+              <rect x="0" y="0" width="95" height="515" fill="#163026" opacity=".65"/>
+              <rect x="825" y="0" width="95" height="515" fill="#183127" opacity=".72"/>
+              <g stroke="#cad6df" stroke-width="3" opacity=".42" stroke-dasharray="26 23">
+                <line x1="350" y1="0" x2="350" y2="515"/>
+                <line x1="576" y1="0" x2="576" y2="515"/>
+              </g>
+              <g opacity=".34" fill="#dce6eb">
+                <rect x="126" y="93" width="668" height="8"/>
+                <rect x="126" y="113" width="668" height="8"/>
+                <rect x="126" y="133" width="668" height="8"/>
+              </g>
+              <text x="144" y="26" fill="#7390a6" font-size="10" font-family="monospace">SUPPORT SURFACE / ROAD</text>
+              <g class="scene-object" data-select="road" tabindex="0" role="button" aria-label="选择道路支撑面">
+                <rect class="selection-ring" x="128" y="7" width="664" height="499" rx="13"/>
+                <rect x="139" y="462" width="130" height="29" rx="8" fill="rgba(87,199,170,.09)" stroke="rgba(87,199,170,.25)"/>
+                <text x="151" y="480" fill="#9edac8" font-size="10">点击道路：support ≠ obstacle</text>
+              </g>
+            </g>
+
+            <!-- ego sensor -->
+            <g transform="translate(438 447)">
+              <path d="M-25 21 L-18 -18 Q-16 -29 0 -33 Q16 -29 18 -18 L25 21 Z" fill="#dce9f1" opacity=".88"/>
+              <rect x="-18" y="-16" width="36" height="23" rx="7" fill="#658397"/>
+              <circle cx="0" cy="-2" r="5" fill="#4ee6d8" filter="url(#softGlow)"/>
+              <text x="32" y="3" fill="#adc1d0" font-size="9" font-family="monospace">EGO / SENSOR</text>
+            </g>
+
+            <!-- ray observation evidence -->
+            <g class="evidence-layer">
+              <line class="ray" x1="438" y1="445" x2="324" y2="255"/>
+              <line class="ray" x1="438" y1="445" x2="350" y2="242"/>
+              <line class="ray" x1="438" y1="445" x2="397" y2="263"/>
+              <line class="ray" x1="438" y1="445" x2="584" y2="184"/>
+              <line class="ray" x1="438" y1="445" x2="635" y2="207"/>
+              <circle class="ray-hit" cx="324" cy="255" r="3"/>
+              <circle class="ray-hit" cx="350" cy="242" r="3"/>
+              <circle class="ray-hit" cx="397" cy="263" r="3"/>
+              <circle class="ray-hit" cx="584" cy="184" r="3"/>
+              <circle class="ray-hit" cx="635" cy="207" r="3"/>
+              <g transform="translate(471 379)">
+                <rect class="tag-bg" x="0" y="0" width="128" height="31" rx="8"/>
+                <text class="tag-text" x="10" y="13">R = hit / pass evidence</text>
+                <text class="tag-sub" x="10" y="24">不是第三种几何类别</text>
+              </g>
+            </g>
+
+            <!-- known car -->
+            <g class="scene-object raw-object" data-select="car" tabindex="0" role="button" aria-label="选择已知汽车">
+              <rect class="selection-ring" x="544" y="145" width="123" height="83" rx="28"/>
+              <g transform="translate(606 186) rotate(3)">
+                <rect x="-48" y="-29" width="96" height="58" rx="20" fill="#4c8dbe" stroke="#91c8ef" stroke-width="2"/>
+                <rect x="-29" y="-20" width="58" height="40" rx="12" fill="#17364e"/>
+                <rect x="-25" y="-16" width="50" height="12" rx="5" fill="#78a8c6" opacity=".58"/>
+                <rect x="-41" y="-34" width="20" height="6" rx="3" fill="#1b2835"/>
+                <rect x="21" y="-34" width="20" height="6" rx="3" fill="#1b2835"/>
+                <rect x="-41" y="28" width="20" height="6" rx="3" fill="#1b2835"/>
+                <rect x="21" y="28" width="20" height="6" rx="3" fill="#1b2835"/>
+              </g>
+            </g>
+
+            <!-- sofa unknown -->
+            <g class="scene-object raw-object selected" data-select="sofa" tabindex="0" role="button" aria-label="选择未知沙发">
+              <rect class="selection-ring" x="291" y="221" width="130" height="88" rx="25"/>
+              <g transform="translate(355 264) rotate(-6)">
+                <rect x="-48" y="-25" width="96" height="50" rx="13" fill="url(#sofaGrad)" stroke="#ffc074" stroke-width="2"/>
+                <rect x="-54" y="-30" width="18" height="60" rx="8" fill="#ad5b3b"/>
+                <rect x="36" y="-30" width="18" height="60" rx="8" fill="#ad5b3b"/>
+                <rect x="-34" y="-18" width="31" height="36" rx="7" fill="#da8750"/>
+                <rect x="3" y="-18" width="31" height="36" rx="7" fill="#da8750"/>
+                <line x1="0" y1="-17" x2="0" y2="18" stroke="#a95a3e"/>
+              </g>
+            </g>
+
+            <!-- tree / residual field -->
+            <g class="scene-object raw-object" data-select="tree" tabindex="0" role="button" aria-label="选择连续植被">
+              <ellipse class="selection-ring" cx="858" cy="282" rx="49" ry="85"/>
+              <g fill="#315f48" stroke="#6d9b7d" stroke-width="1.4">
+                <circle cx="851" cy="229" r="31"/><circle cx="871" cy="257" r="35"/><circle cx="844" cy="282" r="40"/>
+                <circle cx="873" cy="311" r="33"/><circle cx="846" cy="337" r="29"/>
+              </g>
+              <path d="M858 217 C850 260 866 307 855 355" fill="none" stroke="#795d43" stroke-width="8" opacity=".8"/>
+            </g>
+
+            <!-- small tire, left unselected illustrative OOD -->
+            <g opacity=".8">
+              <circle cx="710" cy="368" r="18" fill="#111820" stroke="#768594" stroke-width="5"/>
+              <circle cx="710" cy="368" r="7" fill="#263849"/>
+              <text x="735" y="372" fill="#71899b" font-size="9">another unseen obstacle</text>
+            </g>
+
+            <!-- proposals: deliberately duplicated around sofa -->
+            <g class="proposal-layer">
+              <ellipse class="proposal" cx="350" cy="263" rx="76" ry="55"/>
+              <ellipse class="proposal secondary" cx="369" cy="268" rx="67" ry="46"/>
+              <text class="proposal-label" x="280" y="204">proposal p₁</text>
+              <text class="proposal-label" x="386" y="327">proposal p₂</text>
+              <ellipse class="proposal" cx="606" cy="186" rx="72" ry="54"/>
+              <text class="proposal-label" x="651" y="139">proposal p₃</text>
+              <path d="M278 345 C314 326 323 308 330 295" fill="none" stroke="#a58cff" stroke-width="1.5" marker-end="url(#arrowCyan)" opacity=".75"/>
+              <g transform="translate(177 341)">
+                <rect class="tag-bg" width="112" height="38" rx="8"/>
+                <text class="tag-text" x="10" y="15">候选不是世界真值</text>
+                <text class="tag-sub" x="10" y="29">可重复、合并或漏检</text>
+              </g>
+            </g>
+
+            <!-- ownership masks -->
+            <g class="ownership-layer">
+              <rect class="owner-mask-known" x="541" y="142" width="130" height="89" rx="30"/>
+              <rect class="owner-mask-new" x="288" y="218" width="136" height="94" rx="27"/>
+              <path class="owner-mask-residual" d="M818 199 C874 178 908 215 904 273 C911 326 889 374 832 368 C803 329 801 244 818 199Z"/>
+              <g transform="translate(548 239)">
+                <rect class="tag-bg" width="106" height="35" rx="8"/>
+                <text class="tag-text" x="9" y="14">A = q₃ / entity</text>
+                <text class="tag-sub" x="9" y="27">每个 cell 一个 owner</text>
+              </g>
+              <g transform="translate(296 319)">
+                <rect class="tag-bg" width="114" height="35" rx="8"/>
+                <text class="tag-text" x="9" y="14">A = q₁₇ / entity</text>
+                <text class="tag-sub" x="9" y="27">语义未知但实体成立</text>
+              </g>
+              <g transform="translate(789 382)">
+                <rect class="tag-bg" width="112" height="35" rx="8"/>
+                <text class="tag-text" x="9" y="14">A = residual</text>
+                <text class="tag-sub" x="9" y="27">无需独立身份</text>
+              </g>
+            </g>
+
+            <!-- semantic links -->
+            <g class="semantic-layer">
+              <path class="semantic-link semantic-known" d="M606 134 C606 105 651 87 703 87" fill="none"/>
+              <path class="semantic-link" d="M355 210 C355 163 310 153 259 153" fill="none"/>
+              <g transform="translate(684 52)">
+                <rect class="tag-bg" width="153" height="43" rx="10"/>
+                <text class="tag-text" x="11" y="16">known support: car</text>
+                <text x="11" y="33" fill="#75bfff" font-size="10" font-family="monospace">P(known) = 0.92</text>
+              </g>
+              <g transform="translate(113 122)">
+                <rect class="tag-bg" width="158" height="43" rx="10"/>
+                <text class="tag-text" x="11" y="16">outside known supports</text>
+                <text x="11" y="33" fill="#ffc45b" font-size="10" font-family="monospace">P(new) = 0.90</text>
+              </g>
+            </g>
+          </svg>
+
+          <svg class="view" id="sideView" viewBox="0 0 920 515" role="img" aria-label="可交互 BEV 高度侧视图">
+            <defs>
+              <pattern id="sideGrid" width="38" height="38" patternUnits="userSpaceOnUse">
+                <path d="M38 0H0V38" fill="none" stroke="rgba(163,193,214,.075)"/>
+              </pattern>
+              <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#0a1d2d"/>
+                <stop offset="1" stop-color="#07121e"/>
+              </linearGradient>
+            </defs>
+            <rect width="920" height="515" fill="url(#skyGrad)"/>
+            <rect width="920" height="515" fill="url(#sideGrid)"/>
+
+            <!-- height bands -->
+            <g opacity=".95">
+              <rect x="93" y="328" width="747" height="81" fill="rgba(255,180,79,.05)" stroke="rgba(255,180,79,.16)"/>
+              <rect x="93" y="216" width="747" height="112" fill="rgba(95,175,255,.035)" stroke="rgba(95,175,255,.13)"/>
+              <rect x="93" y="88" width="747" height="128" fill="rgba(165,140,255,.03)" stroke="rgba(165,140,255,.12)"/>
+              <text x="104" y="348" fill="#be9962" font-size="10" font-family="monospace">LOW OBSTACLE 0–0.5m</text>
+              <text x="104" y="236" fill="#7da9cd" font-size="10" font-family="monospace">VEHICLE ENVELOPE 0.5–2.0m</text>
+              <text x="104" y="108" fill="#8e82b6" font-size="10" font-family="monospace">HIGH STRUCTURE 2.0m+</text>
+            </g>
+
+            <!-- ground/support -->
+            <path d="M45 410 C250 401 330 409 458 404 C620 397 733 408 875 401 L875 454 L45 454Z" fill="#2d4650" stroke="#57c7aa" stroke-width="2"/>
+            <path d="M45 454H875V515H45Z" fill="#122a24"/>
+            <g class="scene-object" data-select="road" tabindex="0" role="button">
+              <path class="selection-ring" d="M47 397 C250 389 337 397 460 392 C620 386 749 397 873 389"/>
+              <text x="635" y="437" fill="#9edac8" font-size="10">Gᵤ = ground height + support type</text>
+            </g>
+
+            <!-- sofa side -->
+            <g class="scene-object raw-object selected" data-select="sofa" tabindex="0" role="button">
+              <rect class="selection-ring" x="209" y="274" width="184" height="139" rx="22"/>
+              <g transform="translate(300 349)">
+                <rect x="-66" y="-31" width="132" height="54" rx="12" fill="#ce7547" stroke="#ffc074" stroke-width="2"/>
+                <rect x="-74" y="-65" width="20" height="87" rx="9" fill="#a95439"/>
+                <rect x="54" y="-65" width="20" height="87" rx="9" fill="#a95439"/>
+                <path d="M-55 -64 Q0 -84 55 -64 L55 -22 L-55 -22Z" fill="#d8834c"/>
+                <rect x="-58" y="23" width="10" height="13" rx="3" fill="#7d4a38"/>
+                <rect x="48" y="23" width="10" height="13" rx="3" fill="#7d4a38"/>
+              </g>
+            </g>
+
+            <!-- car side -->
+            <g class="scene-object raw-object" data-select="car" tabindex="0" role="button">
+              <rect class="selection-ring" x="476" y="250" width="229" height="165" rx="38"/>
+              <g transform="translate(590 352)">
+                <path d="M-95 18 L-82 -37 Q-72 -65 -25 -68 L27 -68 Q60 -65 78 -35 L94 18Z" fill="#4c8dbe" stroke="#91c8ef" stroke-width="2"/>
+                <path d="M-57 -38 Q-44 -56 -21 -58 H22 Q42 -56 56 -38Z" fill="#17364e"/>
+                <circle cx="-58" cy="20" r="21" fill="#111820" stroke="#657989" stroke-width="5"/>
+                <circle cx="59" cy="20" r="21" fill="#111820" stroke="#657989" stroke-width="5"/>
+              </g>
+            </g>
+
+            <!-- tree residual side -->
+            <g class="scene-object raw-object" data-select="tree" tabindex="0" role="button">
+              <rect class="selection-ring" x="722" y="76" width="151" height="337" rx="55"/>
+              <path d="M799 400 C787 314 814 212 799 127" fill="none" stroke="#795d43" stroke-width="17"/>
+              <g fill="#315f48" stroke="#6d9b7d" stroke-width="1.5">
+                <circle cx="799" cy="117" r="54"/><circle cx="758" cy="154" r="45"/><circle cx="838" cy="159" r="50"/><circle cx="799" cy="183" r="57"/>
+              </g>
+            </g>
+
+            <!-- evidence rays -->
+            <g class="evidence-layer">
+              <g transform="translate(107 407)">
+                <path d="M-25 13 L-18 -22 H18 L25 13Z" fill="#dce9f1" opacity=".85"/>
+                <circle cx="0" cy="-12" r="5" fill="#4ee6d8" filter="url(#softGlow)"/>
+              </g>
+              <line class="ray" x1="107" y1="392" x2="231" y2="342"/>
+              <line class="ray" x1="107" y1="392" x2="237" y2="307"/>
+              <line class="ray" x1="107" y1="392" x2="500" y2="349"/>
+              <circle class="ray-hit" cx="231" cy="342" r="3"/><circle class="ray-hit" cx="237" cy="307" r="3"/><circle class="ray-hit" cx="500" cy="349" r="3"/>
+            </g>
+
+            <g class="proposal-layer">
+              <rect class="proposal" x="204" y="267" width="196" height="151" rx="27"/>
+              <rect class="proposal secondary" x="221" y="282" width="183" height="137" rx="25"/>
+              <rect class="proposal" x="470" y="242" width="241" height="179" rx="42"/>
+              <text class="proposal-label" x="202" y="254">two candidate hypotheses</text>
+            </g>
+
+            <g class="ownership-layer">
+              <rect class="owner-mask-new" x="205" y="269" width="193" height="149" rx="27"/>
+              <rect class="owner-mask-known" x="472" y="245" width="237" height="174" rx="40"/>
+              <rect class="owner-mask-residual" x="718" y="70" width="159" height="351" rx="59"/>
+            </g>
+
+            <g class="semantic-layer">
+              <path class="semantic-link" d="M300 264 C300 216 270 192 234 179" fill="none"/>
+              <g transform="translate(135 142)">
+                <rect class="tag-bg" width="145" height="43" rx="10"/>
+                <text class="tag-text" x="11" y="16">entity geometry exists</text>
+                <text x="11" y="33" fill="#ffc45b" font-size="10" font-family="monospace">concept = NEW</text>
+              </g>
+              <path class="semantic-link semantic-known" d="M591 235 C591 187 630 173 678 165" fill="none"/>
+              <g transform="translate(660 132)">
+                <rect class="tag-bg" width="137" height="43" rx="10"/>
+                <text class="tag-text" x="11" y="16">entity geometry exists</text>
+                <text x="11" y="33" fill="#75bfff" font-size="10" font-family="monospace">concept = CAR</text>
+              </g>
+            </g>
+          </svg>
+
+          <div class="canvas-hint">点击对象 · ← → 切换步骤 · 1–4 切换对象</div>
+          <div class="legend">
+            <span class="legend-item"><i class="legend-dot" style="background:var(--support)"></i>support surface</span>
+            <span class="legend-item"><i class="legend-dot" style="background:var(--entity-car)"></i>known entity</span>
+            <span class="legend-item"><i class="legend-dot" style="background:var(--entity-new)"></i>new entity</span>
+            <span class="legend-item"><i class="legend-dot" style="background:var(--residual)"></i>residual field</span>
+            <span class="legend-item"><i class="legend-dot" style="background:var(--violet)"></i>proposal hypothesis</span>
+          </div>
+        </div>
+
+        <div class="stage-caption">
+          <div class="stage-kicker" id="stageKicker">STEP 00</div>
+          <div class="stage-copy">
+            <strong id="stageTitle">先定义世界，不先定义分类器</strong>
+            <p id="stageDescription">同一位置同时包含支撑面、阻挡体、观测证据、实体归属和知识解释。它们不能被压进一个互斥 softmax。</p>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel inspector">
+        <div class="panel-head">
+          <div class="panel-title">
+            <strong>变量检查器</strong>
+            <span>当前对象如何穿过四层世界模型</span>
+          </div>
+          <span class="badge" id="headerBadge">NEW ENTITY</span>
+        </div>
+
+        <div class="object-tabs">
+          <button class="object-tab active" data-object="sofa">沙发</button>
+          <button class="object-tab" data-object="car">汽车</button>
+          <button class="object-tab" data-object="tree">连续植被</button>
+          <button class="object-tab" data-object="road">道路</button>
+        </div>
+
+        <div class="inspect-scroll">
+          <div class="object-heading">
+            <div class="object-name">
+              <i class="object-color" id="objectColor"></i>
+              <div>
+                <h2 id="objectName">道路上的沙发</h2>
+                <p id="objectSubtitle">真实阻挡实体 · 当前 taxonomy 无法解释</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="layer-stack">
+            <div class="layer-row" data-layer="0">
+              <span class="layer-index">01</span><span class="layer-label">物理层</span><span class="layer-value" id="physicalValue">blocking occupied</span>
+            </div>
+            <div class="layer-row" data-layer="1">
+              <span class="layer-index">02</span><span class="layer-label">观测层</span><span class="layer-value" id="evidenceValue">direct hit · high</span>
+            </div>
+            <div class="layer-row" data-layer="2">
+              <span class="layer-index">03</span><span class="layer-label">Entity 层</span><span class="layer-value" id="entityValue">entity q₁₇</span>
+            </div>
+            <div class="layer-row" data-layer="3">
+              <span class="layer-index">04</span><span class="layer-label">知识层</span><span class="layer-value" id="conceptValue">NEW relative to K</span>
+            </div>
+          </div>
+
+          <div class="mini-title">Object embedding 与已知支持区域 <span id="densityHint">entity-level semantic space</span></div>
+          <div class="density-card">
+            <svg viewBox="0 0 320 118" role="img" aria-label="已知类支持区域示意图">
+              <defs>
+                <radialGradient id="carDensity">
+                  <stop offset="0" stop-color="#5fafff" stop-opacity=".42"/>
+                  <stop offset="1" stop-color="#5fafff" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="pedDensity">
+                  <stop offset="0" stop-color="#a58cff" stop-opacity=".34"/>
+                  <stop offset="1" stop-color="#a58cff" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="bikeDensity">
+                  <stop offset="0" stop-color="#77e59b" stop-opacity=".3"/>
+                  <stop offset="1" stop-color="#77e59b" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <g opacity=".6" stroke="#294155" stroke-width="1">
+                <line x1="18" y1="98" x2="306" y2="98"/><line x1="18" y1="98" x2="18" y2="10"/>
+                <line x1="90" y1="12" x2="90" y2="102" opacity=".4"/><line x1="162" y1="12" x2="162" y2="102" opacity=".4"/><line x1="234" y1="12" x2="234" y2="102" opacity=".4"/>
+              </g>
+              <ellipse cx="75" cy="61" rx="56" ry="42" fill="url(#carDensity)"/>
+              <ellipse cx="184" cy="36" rx="45" ry="29" fill="url(#pedDensity)"/>
+              <ellipse cx="210" cy="83" rx="49" ry="29" fill="url(#bikeDensity)"/>
+              <ellipse cx="75" cy="61" rx="25" ry="18" fill="none" stroke="#5fafff" stroke-opacity=".5"/>
+              <ellipse cx="184" cy="36" rx="20" ry="13" fill="none" stroke="#a58cff" stroke-opacity=".44"/>
+              <ellipse cx="210" cy="83" rx="21" ry="13" fill="none" stroke="#77e59b" stroke-opacity=".42"/>
+              <text x="55" y="65" fill="#9ed0f4" font-size="9">car</text>
+              <text x="170" y="39" fill="#c6baff" font-size="9">ped</text>
+              <text x="194" y="86" fill="#a9edbd" font-size="9">bike</text>
+              <g id="embeddingPoint" transform="translate(282 30)">
+                <circle r="10" fill="rgba(255,196,91,.16)" stroke="#ffc45b" stroke-width="1.5"/>
+                <circle r="3.5" fill="#ffc45b" filter="url(#softGlow)"/>
+              </g>
+              <text id="embeddingLabel" x="248" y="17" fill="#ffd384" font-size="8" font-family="monospace">z_sofa</text>
+            </svg>
+
+            <div class="bars">
+              <div class="bar-row"><span class="bar-label">car</span><span class="bar-track"><i class="bar-fill" id="barCar" style="background:var(--blue)"></i></span><span class="bar-value" id="valCar">03%</span></div>
+              <div class="bar-row"><span class="bar-label">pedestrian</span><span class="bar-track"><i class="bar-fill" id="barPed" style="background:var(--violet)"></i></span><span class="bar-value" id="valPed">02%</span></div>
+              <div class="bar-row"><span class="bar-label">bicycle</span><span class="bar-track"><i class="bar-fill" id="barBike" style="background:var(--green)"></i></span><span class="bar-value" id="valBike">05%</span></div>
+              <div class="bar-row"><span class="bar-label">new</span><span class="bar-track"><i class="bar-fill" id="barNew" style="background:var(--amber)"></i></span><span class="bar-value" id="valNew">90%</span></div>
+            </div>
+          </div>
+
+          <div class="equation">
+            <div class="equation-label" id="equationLabel">WORLD FACTORIZATION</div>
+            <div class="equation-code" id="equationCode">q(W|X,K) = q(G,O,R|X) · q(A,E|O,G,X) · ∏q q(zq|Mq,X) p(Cq|zq,K)</div>
+            <div class="equation-note" id="equationNote">依赖顺序是 occupancy → entity → known/new，而不是 known classification → object existence。</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <nav class="panel pipeline" aria-label="建模步骤">
+      <button class="step active" data-step="0"><span class="step-no">STEP 00</span><strong>世界变量</strong><span>先拆开物理、证据、实体和知识</span></button>
+      <button class="step" data-step="1"><span class="step-no">STEP 01</span><strong>物理与观测</strong><span>support、blocking 与 evidence</span></button>
+      <button class="step" data-step="2"><span class="step-no">STEP 02</span><strong>Entity Proposal</strong><span>网络提出候选解释，不等于世界真值</span></button>
+      <button class="step" data-step="3"><span class="step-no">STEP 03</span><strong>Ownership</strong><span>occupied cells 归属于 entity 或 residual</span></button>
+      <button class="step" data-step="4"><span class="step-no">STEP 04</span><strong>Known / New</strong><span>当前知识库能否解释完整 entity</span></button>
+    </nav>
+    <div class="footer-note">NEO-Occ Modeling Lab · 本页只解释建模，不包含训练策略和推理阈值</div>
+  </main>
+
+  <!-- 2D comparison modal -->
+  <div class="modal-backdrop" id="compareModal" role="dialog" aria-modal="true" aria-labelledby="compareTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div><h2 id="compareTitle">借鉴 2D proposal，但不复制 2D pipeline</h2><p>保留 object-level reasoning，改写物理世界与失败兜底。</p></div>
+        <button class="btn close" data-close="compareModal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body compare-grid">
+        <div class="compare-card">
+          <div class="compare-label">TRADITIONAL 2D OOD DETECTOR</div>
+          <h3>Proposal 决定对象是否存在</h3>
+          <div class="flow-node">Image features</div><div class="flow-arrow">↓</div>
+          <div class="flow-node">Known-biased object proposals</div><div class="flow-arrow">↓</div>
+          <div class="flow-node">Known classification / rejection</div>
+          <div class="failure">如果 unknown 没有 proposal，它通常直接成为 background；系统连“那里有一个物体”都不会表达。</div>
+        </div>
+        <div class="compare-card good">
+          <div class="compare-label">BEV OCCUPANCY WORLD MODEL</div>
+          <h3>物理占据先于语义解释</h3>
+          <div class="flow-node">Height-aware blocking occupancy</div><div class="flow-arrow">↓</div>
+          <div class="flow-node">Entity proposals + ownership</div><div class="flow-arrow">↓</div>
+          <div class="flow-node">Known support / new concept</div>
+          <div class="failure">即使 proposal 或 known/new 判断失败，阻挡体仍保留在 occupancy world 中，不会因“没名字”而消失。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- symbols modal -->
+  <div class="modal-backdrop" id="symbolModal" role="dialog" aria-modal="true" aria-labelledby="symbolTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div><h2 id="symbolTitle">世界变量表</h2><p>这些变量描述不同问题，不应该被压进一个 softmax。</p></div>
+        <button class="btn close" data-close="symbolModal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body symbol-grid">
+        <div class="symbol"><code>Gᵤ</code><div>BEV cell 的支撑面：ground height、road、sidewalk、drivable 属性。</div></div>
+        <div class="symbol"><code>Oᵤₕ</code><div>高度层中的 blocking occupancy；回答物理碰撞，而不是语义类别。</div></div>
+        <div class="symbol"><code>Rᵤₕ</code><div>hit/pass 或 direct observation evidence；无证据不等于 free。</div></div>
+        <div class="symbol"><code>Aᵤₕ</code><div>ownership：free、residual 或 entity q；使 decomposition 可解释。</div></div>
+        <div class="symbol"><code>Mq</code><div>第 q 个 entity 的 2.5D/3D mask，而不只是一个 bounding box。</div></div>
+        <div class="symbol"><code>Bq</code><div>entity existence；实体是否真实存在，不依赖它是否属于 known class。</div></div>
+        <div class="symbol"><code>zq</code><div>完整 entity 聚合后的语义 embedding；用于与 known supports 比较。</div></div>
+        <div class="symbol"><code>Cq</code><div>相对于当前知识库 K 的 concept：known k 或 new。Unknown 是知识事件。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var app = document.getElementById('app');
+      var currentStep = 0;
+      var currentObject = 'sofa';
+      var tourTimer = null;
+
+      var steps = [
+        {
+          kicker: 'STEP 00',
+          title: '先定义世界，不先定义分类器',
+          description: '同一位置同时包含支撑面、阻挡体、观测证据、实体归属和知识解释。它们不能被压进一个互斥 softmax。',
+          label: 'WORLD FACTORIZATION',
+          code: 'q(W|X,K) = q(G,O,R|X) · q(A,E|O,G,X) · ∏q q(zq|Mq,X) p(Cq|zq,K)',
+          note: '依赖顺序是 occupancy → entity → known/new，而不是 known classification → object existence。'
+        },
+        {
+          kicker: 'STEP 01',
+          title: '物理状态与观测状态是两套坐标轴',
+          description: 'blocking occupancy 描述世界中是否有阻挡体；hit/pass evidence 描述传感器看到了多少。Unobserved 不是第三种几何类别。',
+          label: 'PHYSICAL + EVIDENCE',
+          code: 'Oᵤₕ ∈ {0,1},   Rᵤₕ = (n_hit, n_pass),   Gᵤ = (ground height, support type)',
+          note: '道路表面是 support；道路上的沙发是 blocking volume。一个 BEV cell 可以同时包含二者。'
+        },
+        {
+          kicker: 'STEP 02',
+          title: 'Proposal 是网络假设，Entity 是世界对象',
+          description: 'proposal/query 只是对潜在 entity 的候选解释：它可以重复、合并、误报或漏检，因此不能直接等同于物体存在。',
+          label: 'ENTITY HYPOTHESES',
+          code: 'proposal pj ≈ candidate (existence, mask, geometry, embedding)',
+          note: '这里借鉴 DETR/MaskFormer，但候选由 blocking geometry 支持，而不是先由 known semantic class 接受。'
+        },
+        {
+          kicker: 'STEP 03',
+          title: 'Ownership 将 occupied world 分解为实体与残余场',
+          description: '每个 occupied height cell 被分配给一个 entity，或归入无需独立身份的 residual field。这样避免重复 queries 与 stuff 同时解释同一区域。',
+          label: 'PANOPTIC OWNERSHIP',
+          code: 'Aᵤₕ ∈ {free, residual, 1…Q},   Oᵤₕ = 1[Aᵤₕ ≠ free],   Mqᵤₕ = 1[Aᵤₕ = q]',
+          note: 'Ownership partition 比单纯 noisy-OR 更容易解释：每个 3D cell 只有一个 owner。'
+        },
+        {
+          kicker: 'STEP 04',
+          title: 'Unknown 是完整 Entity 无法被当前知识库解释',
+          description: '实体先在物理世界中成立，再将 object embedding 与 known-class supports 比较。沙发、轮胎和树干不需要共享一个 unknown prototype。',
+          label: 'CONCEPT MODEL SELECTION',
+          code: 'P(Cq=k|zq,K) ∝ πk pk(zq),   P(Cq=new|zq,K) ∝ π0 p0(zq)',
+          note: 'new 是相对于 taxonomy K 的知识事件，不是 occupancy 类型，也不是所有陌生物体的共同语义类别。'
+        }
+      ];
+
+      var objects = {
+        sofa: {
+          name: '道路上的沙发',
+          subtitle: '真实阻挡实体 · 当前 taxonomy 无法解释',
+          badge: 'NEW ENTITY', badgeClass: '', color: '#ffb34f',
+          physical: 'blocking occupied', evidence: 'direct hit · high', entity: 'entity q₁₇', concept: 'NEW relative to K',
+          scores: [3, 2, 5, 90], point: [282, 30], pointLabel: 'z_sofa', pointColor: '#ffc45b',
+          densityHint: '落在全部 known supports 之外'
+        },
+        car: {
+          name: '已知汽车',
+          subtitle: '真实阻挡实体 · 被 car support 高概率解释',
+          badge: 'KNOWN / CAR', badgeClass: 'known', color: '#5fafff',
+          physical: 'blocking occupied', evidence: 'direct hit · high', entity: 'entity q₃', concept: 'KNOWN: car',
+          scores: [92, 1, 3, 4], point: [77, 62], pointLabel: 'z_car', pointColor: '#6ab7ff',
+          densityHint: '位于 car class support 内部'
+        },
+        tree: {
+          name: '连续路边植被',
+          subtitle: '物理占据成立 · 默认由 residual field 表达',
+          badge: 'RESIDUAL FIELD', badgeClass: 'field', color: '#739087',
+          physical: 'occupied structure', evidence: 'partial observation', entity: 'ownership: residual', concept: 'semantic decision masked',
+          scores: [0, 0, 0, 0], point: [252, 81], pointLabel: 'no entity zq', pointColor: '#739087',
+          densityHint: '不自动当作 unknown object'
+        },
+        road: {
+          name: '道路支撑面',
+          subtitle: '3D 表面存在 · 但不属于 blocking obstacle',
+          badge: 'SUPPORT SURFACE', badgeClass: 'support', color: '#57c7aa',
+          physical: 'support, not blocking', evidence: 'ray pass · high', entity: 'no object entity', concept: 'support semantics',
+          scores: [0, 0, 0, 0], point: [40, 96], pointLabel: 'no object zq', pointColor: '#57c7aa',
+          densityHint: '不进入 object known/new 判断'
+        }
+      };
+
+      function setStep(index, fromTour) {
+        currentStep = Math.max(0, Math.min(steps.length - 1, index));
+        app.setAttribute('data-step', String(currentStep));
+        var data = steps[currentStep];
+        document.getElementById('stageKicker').textContent = data.kicker;
+        document.getElementById('stageTitle').textContent = data.title;
+        document.getElementById('stageDescription').textContent = data.description;
+        document.getElementById('equationLabel').textContent = data.label;
+        document.getElementById('equationCode').textContent = data.code;
+        document.getElementById('equationNote').textContent = data.note;
+
+        document.querySelectorAll('.step').forEach(function (node) {
+          var value = Number(node.getAttribute('data-step'));
+          node.classList.toggle('active', value === currentStep);
+          node.classList.toggle('done', value < currentStep);
+        });
+
+        document.querySelectorAll('.layer-row').forEach(function (row) {
+          var layer = Number(row.getAttribute('data-layer'));
+          var highlight = false;
+          if (currentStep === 0) highlight = true;
+          if (currentStep === 1 && layer <= 1) highlight = true;
+          if (currentStep === 2 && layer === 2) highlight = true;
+          if (currentStep === 3 && layer === 2) highlight = true;
+          if (currentStep === 4 && layer === 3) highlight = true;
+          row.classList.toggle('highlight', highlight);
+        });
+
+        if (!fromTour && tourTimer) stopTour();
+      }
+
+      function setObject(key) {
+        if (!objects[key]) return;
+        currentObject = key;
+        var data = objects[key];
+
+        document.querySelectorAll('[data-select]').forEach(function (node) {
+          node.classList.toggle('selected', node.getAttribute('data-select') === key);
+        });
+        document.querySelectorAll('.object-tab').forEach(function (node) {
+          node.classList.toggle('active', node.getAttribute('data-object') === key);
+        });
+
+        document.getElementById('objectName').textContent = data.name;
+        document.getElementById('objectSubtitle').textContent = data.subtitle;
+        document.getElementById('physicalValue').textContent = data.physical;
+        document.getElementById('evidenceValue').textContent = data.evidence;
+        document.getElementById('entityValue').textContent = data.entity;
+        document.getElementById('conceptValue').textContent = data.concept;
+        document.getElementById('densityHint').textContent = data.densityHint;
+        document.getElementById('objectColor').style.background = data.color;
+        document.getElementById('objectColor').style.boxShadow = '0 0 19px ' + data.color + '66';
+
+        var badge = document.getElementById('headerBadge');
+        badge.textContent = data.badge;
+        badge.className = 'badge' + (data.badgeClass ? ' ' + data.badgeClass : '');
+
+        var names = ['Car', 'Ped', 'Bike', 'New'];
+        data.scores.forEach(function (score, i) {
+          document.getElementById('bar' + names[i]).style.width = score + '%';
+          document.getElementById('val' + names[i]).textContent = String(score).padStart(2, '0') + '%';
+        });
+
+        var point = document.getElementById('embeddingPoint');
+        point.setAttribute('transform', 'translate(' + data.point[0] + ' ' + data.point[1] + ')');
+        point.querySelectorAll('circle')[0].setAttribute('stroke', data.pointColor);
+        point.querySelectorAll('circle')[1].setAttribute('fill', data.pointColor);
+        var label = document.getElementById('embeddingLabel');
+        label.textContent = data.pointLabel;
+        label.setAttribute('x', String(Math.max(22, data.point[0] - 34)));
+        label.setAttribute('y', String(Math.max(12, data.point[1] - 13)));
+        label.setAttribute('fill', data.pointColor);
+      }
+
+      function setView(name) {
+        document.querySelectorAll('.view').forEach(function (node) {
+          node.classList.toggle('active', node.id === name + 'View');
+        });
+        document.querySelectorAll('.seg-btn').forEach(function (node) {
+          node.classList.toggle('active', node.getAttribute('data-view') === name);
+        });
+      }
+
+      function openModal(id) { document.getElementById(id).classList.add('open'); }
+      function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+      function startTour() {
+        stopTour();
+        var tourBtn = document.getElementById('tourBtn');
+        tourBtn.classList.add('active');
+        tourBtn.innerHTML = '<span class="icon">Ⅱ</span>停止演示';
+        var sequence = [
+          [0, 'sofa', 'bev'], [1, 'sofa', 'side'], [2, 'sofa', 'bev'],
+          [3, 'sofa', 'bev'], [4, 'sofa', 'bev'], [4, 'car', 'bev'],
+          [3, 'tree', 'bev'], [1, 'road', 'side']
+        ];
+        var i = 0;
+        function advance() {
+          var item = sequence[i % sequence.length];
+          setStep(item[0], true); setObject(item[1]); setView(item[2]);
+          i += 1;
+        }
+        advance();
+        tourTimer = window.setInterval(advance, 2600);
+      }
+
+      function stopTour() {
+        if (tourTimer) window.clearInterval(tourTimer);
+        tourTimer = null;
+        var tourBtn = document.getElementById('tourBtn');
+        tourBtn.classList.remove('active');
+        tourBtn.innerHTML = '<span class="icon">▶</span>自动演示';
+      }
+
+      document.querySelectorAll('.step').forEach(function (node) {
+        node.addEventListener('click', function () { setStep(Number(node.getAttribute('data-step'))); });
+      });
+      document.querySelectorAll('.object-tab').forEach(function (node) {
+        node.addEventListener('click', function () { setObject(node.getAttribute('data-object')); });
+      });
+      document.querySelectorAll('[data-select]').forEach(function (node) {
+        node.addEventListener('click', function () { setObject(node.getAttribute('data-select')); });
+        node.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') setObject(node.getAttribute('data-select'));
+        });
+      });
+      document.querySelectorAll('.seg-btn').forEach(function (node) {
+        node.addEventListener('click', function () { setView(node.getAttribute('data-view')); });
+      });
+
+      document.getElementById('compareBtn').addEventListener('click', function () { openModal('compareModal'); });
+      document.getElementById('symbolBtn').addEventListener('click', function () { openModal('symbolModal'); });
+      document.getElementById('tourBtn').addEventListener('click', function () { tourTimer ? stopTour() : startTour(); });
+      document.getElementById('fullBtn').addEventListener('click', function () {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+        else document.exitFullscreen();
+      });
+
+      document.querySelectorAll('[data-close]').forEach(function (node) {
+        node.addEventListener('click', function () { closeModal(node.getAttribute('data-close')); });
+      });
+      document.querySelectorAll('.modal-backdrop').forEach(function (node) {
+        node.addEventListener('click', function (event) { if (event.target === node) closeModal(node.id); });
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') setStep(currentStep + 1);
+        if (event.key === 'ArrowLeft') setStep(currentStep - 1);
+        if (event.key === '1') setObject('sofa');
+        if (event.key === '2') setObject('car');
+        if (event.key === '3') setObject('tree');
+        if (event.key === '4') setObject('road');
+        if (event.key === 'Escape') {
+          stopTour();
+          document.querySelectorAll('.modal-backdrop.open').forEach(function (node) { closeModal(node.id); });
+        }
+      });
+
+      setStep(0, true);
+      setObject('sofa');
+    }());
+  </script>
+</body>
+</html>
